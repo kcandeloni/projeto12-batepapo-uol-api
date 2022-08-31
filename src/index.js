@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import dayjs from 'dayjs';
 
 const app = express();
 
@@ -11,23 +12,26 @@ const messages = [];
 
 //participants
 app.post('/participants', (req, res)=>{
-    
+    const { name } = {...req.body}
+
+    const lastStatus = Date.now();
     participants.push({
        id: participants.length + 1,
-       lastStatus: Date.now(),
-       ...req.body
+       lastStatus,
+       name
     });
 
-    //{from: 'xxx', to: 'Todos', text: 'entra na sala...', type: 'status', time: 'HH:MM:SS'}
-
+    //db.message.insert()
+    messages.push({from: name, to: 'Todos', text: 'entra na sala...', type: 'status', time: dayjs(lastStatus).format('HH:mm:ss')})
+    
     if(false){
-        res.status(422);
+        res.sendStatus(422);
     }
     if(false){
-        res.status(422);
+        res.sendStatus(422);
     }
     if(true){
-        res.status(201);
+        res.sendStatus(201);
     }
 });
 
@@ -38,24 +42,49 @@ app.get('/participants', (req, res)=> {
 
 //messages
 app.post('/messages', (req, res)=> {
-    
-    res.send('messages');
+    const { to, text, type } = {...req.body}
+    const timeMessage = Date.now();
+    const { user } = req.headers;
+    messages.push({
+       id: messages.length + 1,
+       user,
+       time: dayjs(timeMessage).format('HH:mm:ss'),
+       to,
+       text,
+       type
+    });
+
+    if(false){
+        res.sendStatus(422);
+    }
+    if(false){
+        res.sendStatus(422);
+    }
+    if(true){
+        res.sendStatus(201);
+    }
+
 });
 
 app.get('/messages', (req, res)=> {
     
-    res.send('messages');
+    res.send(messages);
 });
 
 //status
 app.post('/status', (req, res)=> {
-    
-    res.send('status');
-});
+    //set lastStatus
+    const { user } = req.headers;
+    //verifica
+    participants.map( user =>
+        {if(Date.now() - user.lastStatus > 10000){
+            //remove from db
+            messages.push({from: user.name, to: 'Todos', text: 'sai da sala...', type: 'status', time: dayjs(Date.now()).format('HH:mm:ss')});
+        }}
+    )
+    console.log(messages);
 
-app.get('/status', (req, res)=> {
-    
-    res.send('status');
+    res.send('OK');
 });
 
 app.listen(5000);

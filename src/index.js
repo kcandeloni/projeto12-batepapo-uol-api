@@ -9,7 +9,7 @@ dotenv.config();
 const mongoClient = new MongoClient(process.env.MONGO_URI);
 let db;
 mongoClient.connect(() => {
-  db = mongoClient.db('test');
+  db = mongoClient.db('chat_uol_api');
 });
 
 const app = express();
@@ -27,8 +27,6 @@ const messagesSchema = joi.object({
     type: joi.string().required().valid('message', 'private_message')
 });
 
-const messages = [];
-
 //participants
 app.post('/participants', async (req, res)=>{
     const { name } = {...req.body}
@@ -36,7 +34,7 @@ app.post('/participants', async (req, res)=>{
     const validation = participantsSchema.validate(req.body, { abortEarly: true });
 
     if (validation.error) {
-        console.log(validation.error.details.map(err => err.messages))
+        console.log(validation.error.details.map(err => err.message))
         res.sendStatus(422);
         return;
     }
@@ -81,34 +79,84 @@ app.get('/participants', async (req, res) => {
   });
 
 //messages
-app.post('/messages', (req, res)=> {
+app.post('/messages', async (req, res)=>{
     const { to, text, type } = {...req.body}
-    const timeMessage = Date.now();
     const { user } = req.headers;
-    messages.push({
-       id: messages.length + 1,
-       user,
-       time: dayjs(timeMessage).format('HH:mm:ss'),
-       to,
-       text,
-       type
-    });
+    const lastStatus = Date.now();
+    const validation = messagesSchema.validate(req.body, { abortEarly: true });
 
-    if(false){
+    if (validation.error) {
+        console.log(validation.error.details.map(err => err.message))
         res.sendStatus(422);
+        return;
     }
-    if(false){
-        res.sendStatus(422);
-    }
-    if(true){
+    
+    try {
+        const validUser = await db.collection('participants').findOne({
+        name: user
+        });
+
+        if(!validUser){
+            res.sendStatus(422);
+            return;
+        }
+
+        await db.collection('messages').insertOne({
+            from: user,
+            to,
+            text,
+            type,
+            time: dayjs(lastStatus).format('HH:mm:ss')
+        });
         res.sendStatus(201);
+    } catch (err) {
+        console.log(err);
+        res.sendStatus(500);
     }
-
+    
 });
 
-app.get('/messages', (req, res)=> {
-    
-    res.send(messages);
+function filterMessages(user, messages, limit=0){
+    const userMessages = messages.filter(
+        message => {
+            if(message.type === "private_message" && 
+                message.from !== user &&
+                message.to !== user
+            ){
+                return false;
+            }
+            return true;
+    });
+
+    if(limit === 0){
+        return userMessages;
+    }
+    return userMessages.slice(-(limit))
+}
+
+app.get('/messages', async (req, res)=> {
+    const { user } = req.headers;
+    const { limit } = req.query;
+    if (limit && limit < 0) {
+        limit = 0;
+    }
+
+    try {
+        const validUser = await db.collection('participants').findOne({
+        name: user
+        });
+
+        if(!validUser){
+            res.sendStatus(422);
+            return;
+        }
+        const messages = await db.collection('messages').find().toArray();
+        const UserMessages = filterMessages(user, messages, limit);
+        res.send(UserMessages);
+    } catch (err) {
+        console.error(err);
+        res.sendStatus(500);
+    }
 });
 
 //status

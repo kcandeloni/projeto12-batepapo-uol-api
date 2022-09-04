@@ -116,7 +116,7 @@ app.post('/messages', async (req, res)=>{
     
 });
 
-function filterMessages(user, messages, limit=0){
+function filterMessages(user, messages, limit){
     const userMessages = messages.filter(
         message => {
             if(message.type === "private_message" && 
@@ -137,7 +137,7 @@ function filterMessages(user, messages, limit=0){
 app.get('/messages', async (req, res)=> {
     const { user } = req.headers;
     const { limit } = req.query;
-    if (limit && limit < 0) {
+    if (!limit || Number.isNaN(limit) || limit < 0) {
         limit = 0;
     }
 
@@ -160,19 +160,27 @@ app.get('/messages', async (req, res)=> {
 });
 
 //status
-app.post('/status', (req, res)=> {
-    //set lastStatus
+app.post('/status', async (req, res)=> {
     const { user } = req.headers;
-    //verifica
-    participants.map( user =>
-        {if(Date.now() - user.lastStatus > 10000){
-            //remove from db
-            messages.push({from: user.name, to: 'Todos', text: 'sai da sala...', type: 'status', time: dayjs(Date.now()).format('HH:mm:ss')});
-        }}
-    )
-    console.log(messages);
+    const lastStatus = Date.now();
+    try {
+        const validUser = await db.collection('participants').findOne({
+        name: user
+        });
 
-    res.send('OK');
+        if(!validUser){
+            res.sendStatus(404);
+            return;
+        }
+
+        await db.collection('participants').updateOne({_id: validUser._id}, {$set: { lastStatus }})
+        res.sendStatus(200);
+    } catch (err) {
+        console.error(err);
+        res.sendStatus(500);
+    }
 });
 
-app.listen(5000);
+app.listen(5000, () => {
+    console.log('Server is litening on port 5000.');
+  });

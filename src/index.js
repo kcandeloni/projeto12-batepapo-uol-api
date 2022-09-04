@@ -1,44 +1,84 @@
 import express from 'express';
 import cors from 'cors';
 import dayjs from 'dayjs';
+import joi from 'joi';
+import { MongoClient, ObjectId } from 'mongodb';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const mongoClient = new MongoClient(process.env.MONGO_URI);
+let db;
+mongoClient.connect(() => {
+  db = mongoClient.db('test');
+});
 
 const app = express();
 
 app.use(express.json());
 app.use(cors());
 
-const participants = [];
+const participantsSchema = joi.object({
+    name: joi.string().required(),
+});
+
+const messagesSchema = joi.object({
+    to: joi.string().required(),
+    text: joi.string().required(),
+    type: joi.string().required().valid('message', 'private_message')
+});
+
 const messages = [];
 
 //participants
-app.post('/participants', (req, res)=>{
+app.post('/participants', async (req, res)=>{
     const { name } = {...req.body}
-
     const lastStatus = Date.now();
-    participants.push({
-       id: participants.length + 1,
-       lastStatus,
-       name
-    });
+    const validation = participantsSchema.validate(req.body, { abortEarly: true });
 
-    //db.message.insert()
-    messages.push({from: name, to: 'Todos', text: 'entra na sala...', type: 'status', time: dayjs(lastStatus).format('HH:mm:ss')})
-    
-    if(false){
+    if (validation.error) {
+        console.log(validation.error.details.map(err => err.messages))
         res.sendStatus(422);
+        return;
     }
-    if(false){
-        res.sendStatus(422);
-    }
-    if(true){
+
+    try {
+        const uniqueParticipants = await db.collection('participants').findOne({
+        name: name
+        });
+
+        if(!!uniqueParticipants){
+            res.sendStatus(409);
+            return;
+        }
+
+        await db.collection('participants').insertOne({
+            lastStatus,
+            name
+        });
+        await db.collection('messages').insertOne({
+            from: name,
+            to: 'Todos',
+            text: 'entra na sala...',
+            type: 'status',
+            time: dayjs(lastStatus).format('HH:mm:ss')
+        });
         res.sendStatus(201);
+    } catch (err) {
+        console.log(err);
+        res.sendStatus(500);
     }
+    
 });
 
-app.get('/participants', (req, res)=> {
-    
-    res.send(participants);
-});
+app.get('/participants', async (req, res) => {
+    try {
+      const participants = await db.collection('participants').find().toArray();
+      res.send(participants);
+    } catch (err) {
+      console.error(err);
+      res.sendStatus(500);
+    }
+  });
 
 //messages
 app.post('/messages', (req, res)=> {

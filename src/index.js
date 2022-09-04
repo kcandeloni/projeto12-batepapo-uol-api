@@ -181,6 +181,28 @@ app.post('/status', async (req, res)=> {
     }
 });
 
+async function userInactive (){
+    
+    const lastStatus = Date.now();
+    try {
+        const participants = await db.collection('participants').find().toArray();
+        const inactive = participants.filter(user => {
+            if(lastStatus - user.lastStatus > 10000){
+                return true;
+            }
+            return false;
+        });
+        inactive.map(async user => {
+            await db.collection('participants').deleteOne({_id: user._id})
+        });
+
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+setInterval(() => userInactive(), 15000);
+
 app.listen(5000, () => {
     console.log('Server is litening on port 5000.');
   });

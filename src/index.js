@@ -193,7 +193,14 @@ async function userInactive (){
             return false;
         });
         inactive.map(async user => {
-            await db.collection('participants').deleteOne({_id: user._id})
+            await db.collection('participants').deleteOne({_id: user._id});
+            await db.collection('messages').insertOne({
+                from: user.name,
+                to: 'Todos',
+                text: 'sai da sala...',
+                type: 'status',
+                time: dayjs(lastStatus).format('HH:mm:ss')
+            });
         });
 
     } catch (err) {
@@ -203,6 +210,32 @@ async function userInactive (){
 
 setInterval(() => userInactive(), 15000);
 
+app.delete('/messages/:id', async (req, res)=> {
+    const { user } = req.headers;
+    const { id } = req.params;
+    try {
+        const validUser = await db.collection('participants').findOne({
+        name: user
+        });
+        if(!validUser){
+            res.sendStatus(401);
+            return;
+        }
+
+        const deleteMessage = await db.collection('messages').findOne({_id: new ObjectId(id)})
+        
+        if(deleteMessage.from !== user){
+            res.sendStatus(401);
+            return;
+        }
+        await db.collection('messages').deleteOne({_id: new ObjectId(id)});
+        res.sendStatus(200);
+    } catch (err) {
+        console.error(err);
+        res.sendStatus(404);
+    }
+});
+
 app.listen(5000, () => {
-    console.log('Server is litening on port 5000.');
+    console.log('Server is listening on port 5000.');
   });

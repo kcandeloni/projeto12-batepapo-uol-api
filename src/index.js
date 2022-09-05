@@ -236,6 +236,42 @@ app.delete('/messages/:id', async (req, res)=> {
     }
 });
 
+app.put('/messages/:id', async (req, res)=> {
+    const { user } = req.headers;
+    const { id } = req.params;
+    const { to, text, type } = {...req.body}
+    const lastStatus = Date.now();
+    const validation = messagesSchema.validate(req.body, { abortEarly: true });
+
+    if (validation.error) {
+        console.log(validation.error.details.map(err => err.message))
+        res.sendStatus(422);
+        return;
+    }
+
+    try {
+        const validUser = await db.collection('participants').findOne({
+        name: user
+        });
+        if(!validUser){
+            res.sendStatus(401);
+            return;
+        }
+
+        const deleteMessage = await db.collection('messages').findOne({_id: new ObjectId(id)})
+        
+        if(deleteMessage.from !== user){
+            res.sendStatus(401);
+            return;
+        }
+        await db.collection('messages').updateOne({_id: new ObjectId(id)}, {$set: { to, text, type }});
+        res.sendStatus(200);
+    } catch (err) {
+        console.error(err);
+        res.sendStatus(404);
+    }
+});
+
 app.listen(5000, () => {
     console.log('Server is listening on port 5000.');
   });
